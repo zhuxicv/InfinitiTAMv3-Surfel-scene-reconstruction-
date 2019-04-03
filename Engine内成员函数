@@ -1,0 +1,75 @@
+这里将surfel scene reconstruction从raw深度图处理开始，至merge相似surfece结束细分为7个步骤，分别对应于这7个函数，下文详细描述函数内部结构。
+
+3.1 PreprocessDepthMap
+此函数调用了三个子函数
+
+calculate_vertex_position
+
+此函数使用如下公式计算点云vertex
+
+
+其中ux,uy使用像素的出现顺序计算，即locID， 后面使用transform_point函数，使用transform参数计算出点云的全局坐标、
+输出保存在vertexmap数组中，以locid为角标存取
+          2.calculate_normal
+
+此函数首先调用try_read_verte函数判断x轴y轴范围2内的点是否存在，并保存该点信息，后使用这些点计算normal。
+
+使用normalmap数组保存结果，以locID为角标。
+
+          3.calculate_radius
+
+此函数涉及到相机参数：
+
+
+
+            @param fx Focal length in x direction
+            @param fy Focal length in y direction
+            @param cx Principal point in x direction
+            @param cy Principal point in y direction
+
+此project使用的radius计算方法不同于keller的论文，而是使用了“Dense Planar SLAM" 论文中的radius计算方法。由于需要包含一整个像素所以sqrt(2.0)作为宽度，公式为：sqrt(2.0)f*像素深度/图像焦距长宽
+
+
+
+3.2 find_corresponding_surfel
+相邻点有可能back project到一起，因此为提升准确将一块4*4的区域作为input depth map, 即 supersamplingfactor = 4。
+
+判断相关surfel的条件是这个区域内某点具有最大的confidence并且这个surfel的depth和目标surfel的depth差小于一个deltadepth则判断两个surfel为相关surfel
+
+返回corresponding map和new point mask
+
+3.3 FuseMatchedPoints
+此函数首先调用了make_surfel 函数，生成一个surfel类的对象，将按LOCID 生成surfel，将相应属性值赋予此surfel
+
+然后判断是否新surfel的radius是否小于原surfel*deltaredius, 小于则将二者merge，confindence取平均
+
+
+
+3.4 MergeSimilarSurfels
+首先调用clear merge target初始化一个merge target map数组
+
+然后调用find mergable surfel, 此函数依据论文中merge surfel的条件，即通过法向量角度，深度等参数筛选点，最后选择最高confidence的点，如果有多个满足条件则选择最接近viewing ray through vg(u)的点。
+
+最后调用prevent_merge_chain, perform_surfel_merge 执行相应功能
+
+
+
+3. 5 AddNewSurfels
+此处涉及到memoryblock
+
+MemoryBlock(size_t dataSize, bool allocate_CPU, bool allocate_CUDA, bool metalCompatible = true)
+（作用应该是将数据转移至cpu）
+
+cpu版是从存储位置取出存储的属性值，创建一个新的surfel并将相应的属性值赋予这个新surfel对象。
+
+
+
+3.6 MarkBadSurfels
+首先调用
+
+clear_removal_mask_entry 函数初始化一个surfelRemovalMask数组
+
+然后调用mark_for_removal_if_unstable函数，此函数使用已知stableSurfelConfidence和timestamp是否在不可信period判断是否为bad surfels，是bad surfel将surfelRemovalMask数组中对应的值置1
+
+3.7 RemoveMarkedSurfels
+作者尚未完成cpu此部分
