@@ -1,0 +1,203 @@
+Definition of related classes
+
+1.ITMSurfelType类的定义
+
+共两种Surfel，灰度Surfel和RGBSurfel
+
+1.1 灰度Surfel
+
+定义中共包括8个参数，分别为：
+
+bool hasColourInformation （False）
+Vector3f normal
+
+Vector3f position
+
+float confidence
+
+float radius
+
+int timestamp(last upload frame)
+
+以下两个参数用于位置纠偏
+
+Vector3f newPosition
+
+Vector3f oldPosition
+
+1.2 RGBSurfel
+
+RGBSurfel 在
+
+bool hasColourInformation
+变量值为True， 除此外相对灰度Surfel多一个参数
+
+Vector3u colour
+
+2.Surfel Scene类的定义
+
+类名：ITMSurfelScene
+
+包含的参数：
+
+Private：
+
+MemoryDeviceType          m_memoryType：存储scene的文件的类别
+ITMSurfelSceneParams   *m_params： scene的参数
+size_t                                      m_surfelCount ： 当前scene包含的surfel数量（此处包含的surfel最大为5000000）
+ORUtils::MemoryBlock<TSurfel>  *m_surfelsMB  ：Scene中的surfel
+其中 ITMSurfelSceneParams包括以下params：
+
+/** The maximum fraction by which a new surfel can have a larger radius than the surfel into which it is being fused if full fusion is to occur. */
+float deltaRadius;
+
+/** The sigma value for the Gaussian used when calculating the sample confidence. */
+float gaussianConfidenceSigma;
+/** The maximum angle allowed between the normals of a pair of surfels if they are to be merged. */
+float maxMergeAngle;
+/** The maximum distance allowed between a pair of surfels if they are to be merged. */
+float maxMergeDist;
+/** The maximum radius a surfel is allowed to have. */
+float maxSurfelRadius;
+/** The minimum factor by which the radii of a pair of surfels must overlap if they are to be merged. */
+float minRadiusOverlapFactor;
+/** The confidence value a surfel must have in order for it to be considered "stable". */
+float stableSurfelConfidence;
+/** The factor by which to supersample (in each axis) the index image used for finding surfel correspondences. */
+int supersamplingFactor;
+/** The maximum depth a surfel must have in order for it to be used for tracking. */
+float trackingSurfelMaxDepth;
+/** The minimum confidence value a surfel must have in order for it to be used for tracking. */
+float trackingSurfelMinConfidence;
+/** The number of time steps a surfel is allowed to be unstable without being updated before being removed. */
+int unstableSurfelPeriod;
+/** The z offset to apply to unstable surfels when trying to ensure that they are only rendered if there is no stable alternative. */
+int unstableSurfelZOffset;
+/** Whether or not to use a Gaussian-weighted sample confidence as described in the Keller paper. */
+bool useGaussianSampleConfidence;
+/** Whether or not to use surfel merging. */
+bool useSurfelMerging;
+
+
+
+Public：
+
+构造函数：
+
+传入参数分别为（scene参数， scene文件存储类别）
+
+参数对应传给相应参数
+
+初始化surfel数量为0
+
+初始化 scene中surfel 时new一个新ORUTILS
+
+析构函数：
+
+delete m_surfelsMB 
+
+成员函数：
+
+*AllocateSurfels:
+
+作用：给新的surfel分配存储空间
+
+输入参数：size_t（需要分配空间的surfel数量）
+
+返回值： 指向存储空间起始位置的指针
+
+（void）DeallocateRemovedSurfels：
+
+作用：删除surfel
+
+输入参数： 需要删除的surfel数量
+
+GetParams：
+
+作用：获取scene参数
+
+返回值：*m_params，scene参数
+
+GetSurfelCount() 
+
+作用：获取surfel的数量
+
+返回值：m_surfelCount即surfel数量
+
+*GetSurfels（）
+
+作用：返回surfels的存储位置
+
+返回值：m_surfelsMB，
+
+Reset()
+
+作用：重置scene
+
+操作：将m_surfelCount置零
+
+3. SurfelSceneReconstructionEngine
+
+类名：
+
+ITMSurfelSceneReconstructionEngine_CPU
+
+传入参数：
+
+需要融合进scene的深度图的大小
+函数变量：
+
+初始化需要的存储空间
+
+size_t pixelCount = depthImageSize.x * depthImageSize.y;
+m_correspondenceMapMB = new ORUtils::MemoryBlock<unsigned int>(pixelCount, true, true);
+m_mergeTargetMapMB = new ORUtils::MemoryBlock<unsigned int>(pixelCount, true, true);
+m_newPointsMaskMB = new ORUtils::MemoryBlock<unsigned short>(pixelCount + 1, true, true);
+m_newPointsPrefixSumMB = new ORUtils::MemoryBlock<unsigned int>(pixelCount + 1, true, true);
+m_normalMapMB = new ORUtils::MemoryBlock<Vector3f>(pixelCount, true, true);
+m_radiusMapMB = new ORUtils::MemoryBlock<float>(pixelCount, true, true);
+m_surfelRemovalMaskMB = new ORUtils::MemoryBlock<unsigned int>(MAX_SURFEL_COUNT, true, true);
+m_vertexMapMB = new ORUtils::MemoryBlock<Vector4f>(pixelCount, true, true);
+
+成员函数（private）:
+
+engine.h 文件中共定义7个抽象成员函数：
+
+AddNewSurfels
+FindCorrespondingSurfels
+FuseMatchedPoints
+MarkBadSurfels
+MergeSimilarSurfels
+PreprocessDepthMap
+RemoveMarkedSurfels
+这里将surfel scene reconstruction从raw深度图处理开始，至merge相似surfel结束细分为7个步骤，分别对应于这7个函数，成员函数部分详细描述函数内部结构。
+
+
+
+4. 以下是算法涉及到的基础类
+
+4.1 ITMView
+
+View是一个结合深度图和RGB图的单位图像，同时包含内部和相关的修正信息
+
+内部变量为：
+
+
+
+修正信息：
+        const ITMRGBDCalib calib
+
+当前帧的RGB色彩图：
+        ITMUChar4Image *rgb; 
+前一帧的RGB色彩图：
+        ITMUChar4Image *rgb_prev; 
+
+深度图，类型为float：
+        ITMFloatImage *depth;
+深度图表面法线（需要时创建）：
+        ITMFloat4Image *depthNormal;
+
+每个像素可能包含的深度数据噪声（需要时创建）：
+        ITMFloatImage *depthUncertainty;
+confidence(此算法confidence基于与中心的距离)：
+        ITMFloatImage *depthConfidence;
