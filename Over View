@@ -1,0 +1,55 @@
+Surfel Scene Reconstruction 算法是infinitamV3版本的新增内容，在其中与TSDF共存
+Surfel Scene Reconstruction 算法完成的任务和TSDF算法的任务相同，都是根据已有raw depth map 和 RGB 图像的场景重建算法
+Surfel Scene Reconstruction 算法相对TSDF的优点在于处理动态场景时，Surfel可以容易的在全局坐标中移动而不用重新计算truncted区域
+Surfel Scene Reconstruction 算法相对TSDF的缺点是在可视化阶段和碰触检测阶段计算量明显比TSDF大。
+SurfelSceneReconstruction 是一种以 Surfel （面元）为基础unit 的重建算法， 而TSDF的算法则是基于vertex。 这两种基础单元存储的信息不同。
+
+根据InfiniTAMV3的代码中对于Surfel的定义，每个Surfel主要包含以下参数：
+
+bool hasColourInformation
+Vector3f normal
+
+Vector3f position
+
+float confidence
+
+float radius
+
+int timestamp(last upload frame)
+
+Vector3f newPosition
+
+Vector3f oldPosition
+
+结合vertex的属性，可以得到二者均具有position 和 normal 参数. 对于confidence参数， TSDF中有类似的参数weight，二者计算方法不同，但代表的意义和使用方法相似。
+
+
+
+与vertex不同的是surfel带有radius值，这里反应出TSDF算法与此算法的不同计算过程
+
+Vertex使每个单元包含其距离表面的距离来代表点的位置，以此计算出面的位置
+Surfel使用带有半径的点为单元，以此表示出物体的面
+末尾三个参数与Surfel Scene Reconstruction算法的修正算法有关
+
+Surfel Scene Reconstruction算法的优点之一为它可以解决dynamic scenes问题
+这里利用上文提到的confidence作为权值merge不同frame中的相同点的global坐标
+这种计算方法还可以剔除快速闪过的非目标平面。
+
+
+
+结合Surfel Scene Reconstruction Enginec.h中定义的的成员函数总结此算法的流程为7步：
+
+PreprocessDepthMap
+AddNewSurfels
+FindCorrespondingSurfels
+MarkBadSurfels
+RemoveMarkedSurfels
+MergeSimilarSurfels
+FuseMatchedPoints
+
+流程图如下
+
+
+
+
+
